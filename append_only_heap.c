@@ -40,6 +40,30 @@ static void hacked_tuple_insert(Relation relation, TupleTableSlot *slot, Command
 	original_fns.tuple_insert(relation, slot, cid, options, bistate);
 }
 
+static void
+hacked_tuple_insert_speculative(Relation relation, TupleTableSlot *slot,
+                                CommandId cid, int options,
+                                BulkInsertState bistate, uint32 specToken)
+{
+	if (relation->rd_amhandler != F_HEAP_TABLEAM_HANDLER)
+	{
+		options |= HEAP_INSERT_SKIP_FSM;
+	}
+	original_fns.tuple_insert_speculative(relation, slot, cid, options, bistate, specToken);
+}
+
+static void
+hacked_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
+                   CommandId cid, int options, BulkInsertState bistate)
+{
+	if (relation->rd_amhandler != F_HEAP_TABLEAM_HANDLER)
+	{
+		options |= HEAP_INSERT_SKIP_FSM;
+	}
+	original_fns.multi_insert(relation, slots, ntuples, cid, options, bistate);
+}
+
+
 static int hack_heapam_methods(TableAmRoutine* heapam)
 {
 	if (heapam->tuple_insert == hacked_tuple_insert) return 0; // already hooked
@@ -53,8 +77,10 @@ static int hack_heapam_methods(TableAmRoutine* heapam)
 	int ret = mprotect((void*)ptr, pages * pagesize, PROT_READ | PROT_WRITE);
 	if (ret != 0) return 1;
 
-	original_fns.tuple_insert = heapam->tuple_insert;
-	heapam->tuple_insert = hacked_tuple_insert;
+#define HOOK(fn) original_fns. fn = heapam-> fn ; heapam-> fn = hacked_##fn;
+	HOOK(tuple_insert);
+	HOOK(tuple_insert_speculative);
+	HOOK(multi_insert);
 
 	return 0;
 }
