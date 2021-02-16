@@ -1,0 +1,4 @@
+comment = 'append only heap'
+default_version = '1.0'
+module_pathname = '$libdir/append_only_heap'
+relocatable = true
